@@ -19,43 +19,43 @@ setlocal cms=--%s com=s:--[[,m:\ ,e:]],:--
 call add(s:undo_ftplugin, 'setlocal fo< cms< com<')
 
 " Tell Vim how to follow dofile(), loadfile() and require() calls. {{{1
-let &l:include = '\v<((do|load)file|require)[^''"]*[''"]\zs[^''"]+'
-let &l:includeexpr = 'xolox#lua#includeexpr(v:fname)'
-call add(s:undo_ftplugin, 'setlocal inc< inex<')
+" let &l:include = '\v<((do|load)file|require)[^''"]*[''"]\zs[^''"]+'
+" let &l:includeexpr = 'xolox#lua#includeexpr(v:fname)'
+" call add(s:undo_ftplugin, 'setlocal inc< inex<')
 
 " Enable completion of Lua keywords, globals and library members. {{{1
-if xolox#misc#option#get('lua_define_completefunc', 1)
-  setlocal completefunc=xolox#lua#completefunc
-  call add(s:undo_ftplugin, 'setlocal completefunc<')
-endif
+" if xolox#misc#option#get('lua_define_completefunc', 1)
+  " setlocal completefunc=xolox#lua#completefunc
+  " call add(s:undo_ftplugin, 'setlocal completefunc<')
+" endif
 
 " Enable dynamic completion by searching "package.path" and "package.cpath". {{{1
-if xolox#misc#option#get('lua_define_omnifunc', 1)
-  setlocal omnifunc=xolox#lua#omnifunc
-  call add(s:undo_ftplugin, 'setlocal omnifunc<')
-endif
+" if xolox#misc#option#get('lua_define_omnifunc', 1)
+  " setlocal omnifunc=xolox#lua#omnifunc
+  " call add(s:undo_ftplugin, 'setlocal omnifunc<')
+" endif
 
 " Set a filename filter for the Windows file open/save dialogs. {{{1
-if has('gui_win32') && !exists('b:browsefilter')
-  let b:browsefilter = "Lua Files (*.lua)\t*.lua\nAll Files (*.*)\t*.*\n"
-  call add(s:undo_ftplugin, 'unlet! b:browsefilter')
-endif
+" if has('gui_win32') && !exists('b:browsefilter')
+  " let b:browsefilter = "Lua Files (*.lua)\t*.lua\nAll Files (*.*)\t*.*\n"
+  " call add(s:undo_ftplugin, 'unlet! b:browsefilter')
+" endif
 
 " Define a buffer local command to manually check the syntax.
-command! -bar -buffer CheckSyntax call xolox#lua#checksyntax()
-call add(s:undo_ftplugin, 'delcommand CheckSyntax')
+" command! -bar -buffer CheckSyntax call xolox#lua#checksyntax()
+" call add(s:undo_ftplugin, 'delcommand CheckSyntax')
 
 " Define a buffer local command to manually check for global variables.
-command! -bar -bang -buffer CheckGlobals call xolox#lua#checkglobals(<q-bang> == '!')
-call add(s:undo_ftplugin, 'delcommand CheckGlobals')
+" command! -bar -bang -buffer CheckGlobals call xolox#lua#checkglobals(<q-bang> == '!')
+" call add(s:undo_ftplugin, 'delcommand CheckGlobals')
 
 " Define mappings for context-sensitive help using Lua Reference for Vim. {{{1
-imap <buffer> <F1> <C-o>:call xolox#lua#help()<Cr>
-nmap <buffer> <F1>      :call xolox#lua#help()<Cr>
-nmap <buffer> K         :call xolox#lua#help()<Cr>
-call add(s:undo_ftplugin, 'iunmap <buffer> <F1>')
-call add(s:undo_ftplugin, 'nunmap <buffer> <F1>')
-call add(s:undo_ftplugin, 'nunmap <buffer> K')
+" imap <buffer> <F1> <C-o>:call xolox#lua#help()<Cr>
+" nmap <buffer> <F1>      :call xolox#lua#help()<Cr>
+" nmap <buffer> K         :call xolox#lua#help()<Cr>
+" call add(s:undo_ftplugin, 'iunmap <buffer> <F1>')
+" call add(s:undo_ftplugin, 'nunmap <buffer> <F1>')
+" call add(s:undo_ftplugin, 'nunmap <buffer> K')
 
 " Define custom text objects to navigate Lua source code. {{{1
 noremap <buffer> <silent> [{ m':call xolox#lua#jumpblock(0)<Cr>
@@ -79,20 +79,20 @@ if exists('loaded_matchit')
 endif
 
 " Enable dynamic completion on typing "require('" or "variable."? {{{1
-if xolox#misc#option#get('lua_define_completion_mappings', 1)
-  inoremap <buffer> <silent> <expr> . xolox#lua#completedynamic('.')
-  call add(s:undo_ftplugin, 'iunmap <buffer> .')
-  inoremap <buffer> <silent> <expr> ' xolox#lua#completedynamic("'")
-  call add(s:undo_ftplugin, "iunmap <buffer> '")
-  inoremap <buffer> <silent> <expr> " xolox#lua#completedynamic('"')
-  call add(s:undo_ftplugin, 'iunmap <buffer> "')
-endif
+" if xolox#misc#option#get('lua_define_completion_mappings', 1)
+"   inoremap <buffer> <silent> <expr> . xolox#lua#completedynamic('.')
+"   call add(s:undo_ftplugin, 'iunmap <buffer> .')
+"   inoremap <buffer> <silent> <expr> ' xolox#lua#completedynamic("'")
+"   call add(s:undo_ftplugin, "iunmap <buffer> '")
+"   inoremap <buffer> <silent> <expr> " xolox#lua#completedynamic('"')
+"   call add(s:undo_ftplugin, 'iunmap <buffer> "')
+" endif
 
 " Enable tool tips with function signatures? {{{1
-if has('balloon_eval')
-  setlocal ballooneval balloonexpr=xolox#lua#getsignature(v:beval_text)
-  call add(s:undo_ftplugin, 'setlocal ballooneval< balloonexpr<')
-endif
+" if has('balloon_eval')
+"   setlocal ballooneval balloonexpr=xolox#lua#getsignature(v:beval_text)
+"   call add(s:undo_ftplugin, 'setlocal ballooneval< balloonexpr<')
+" endif
 
 " }}}1
 
