@@ -1,248 +1,343 @@
 " Vim indent file
 " Language:	Lua script
-" Maintainer:	Zhang Yanpo <drdr.xp 'at' gmail.com>
-" First Author:	Zhang Yanpo <drdr.xp 'at' gmail.com>
-" Last Change:	2016 Aug 19
-
-if exists("b:did_indent")
-    finish
-endif
-let b:did_indent = 1
+" Maintainer: Raymond W. Ko <raymond.w.ko 'at' gmail.com>
+" Former Maintainer:	Marcus Aurelius Farias <marcus.cf 'at' bol.com.br>
+" First Author:	Max Ischenko <mfi 'at' ukr.net>
+" Last Change:	2015 Aug 14
+" Report Issues At: https://github.com/raymond-w-ko/vim-lua-indent
 
 setlocal indentexpr=GetLuaIndent()
+setlocal autoindent
 
 " To make Vim call GetLuaIndent() when it finds '\s*end' or '\s*until'
 " on the current line ('else' is default and includes 'elseif').
 setlocal indentkeys+=0=end,0=until,0=elseif,0=else,0=:,)
-" setlocal indentkeys+=0=end,0=until
-
-setlocal autoindent
 
 " Only define the function once.
-if exists("*GetLuaIndent")
-    finish
+if exists("g:lua_indent_version") && g:lua_indent_version == 2
+  finish
 endif
+let g:lua_indent_version = 2
 
-
-let s:lua_start = '\v%(<do>|<then>|<repeat>|<function>|[{(])'
-let s:lua_mid = '\v%(<else>)'
-let s:lua_end = '\v%(<end>|<elseif>|<until>|[)}])'
-
-" start and mid
-let s:lua_left = '\v%(<do>|<then>|<repeat>|<function>|<else>|[{(])'
-
-let s:lua_pairs = {
-    \ 'function' : '\v<end>',
-    \ 'repeat' : '\v<until>',
-    \ 'then' : '\v%(<else>|<elseif>|<end>)',
-    \ 'else' : '\v%(<end>)',
-    \ 'do' : '\v<end>',
-    \ '{' : '\v[}]',
-    \ '(' : '\v[)]',
-    \ }
-
-let s:lua_follow_align = {
-    \ 'do' : 1,
-    \ 'then' : 1,
-    \ 'repeat' : 1,
-    \ '{' : 1,
-    \ '(' : 1,
-    \ 'else' : 1,
-    \ }
-
-" only need to indent continuous line in a multi expression block
-let s:lua_single_expr_block = {
-    \ '{' : 1,
-    \ '(' : 1,
-    \ }
-
-let s:lua_indent = {
-    \ '(' : 2,
-    \ }
-
-let s:lua_trailing_op = '\v[,=\\+\-*/]\s*$'
-
-let s:skiplines = "synIDattr(synID(line('.'), col('.'), 1), 'name') =~ '\\(Comment\\|String\\)$'"
-
-
-function! GetLuaIndent()
-
-    " function foo(x,    <-- prev ref line, the starting line of a bracket block
-    "              y)    <-- prev line, last non-blank line
-    "
-    "     local a = 1    <-- we are here
-    " end
-
-    let prev_ln = prevnonblank(v:lnum - 1)
-
-    if prev_ln == 0
-        return 0
-    endif
-
-    let block_pos = s:find_container_block([v:lnum, 1])
-    call s:dd('find block pos: ' . string(block_pos))
-
-    if block_pos[0] > 0
-
-        let _matched = getline(block_pos[0])[block_pos[1] - 1 : ]
-        call s:dd('_matched: ' . _matched)
-
-        let matched = matchstr(_matched, s:lua_left)
-        let trailing = _matched[len(matched) : ]
-
-        call s:dd('block left:' . matched)
-        call s:dd('trailing:' . trailing)
-
-        return s:get_indent_in_block(block_pos, matched, trailing)
-    else
-        let _ind = s:continuous_line_indent(v:lnum)
-        call s:dd('continuous line indent: ' . _ind)
-        if _ind != -9999
-            return _ind
-        end
-
-        let container_pos = [0, 0]
-
-        let cur = prevnonblank(v:lnum - 1)
-        if cur == 0
-            return 0
-        endif
-
-        let pos = s:find_child_block([cur, 1], container_pos)
-
-        let head_ln = s:find_continous_head(pos[0])
-        return indent(head_ln)
-    endif
-
+function s:IsLineBlank(line)
+  return a:line =~# '\m\v^\s*$'
 endfunction
 
+function s:FilterStrings(line)
+  let line = a:line
+  " remove string escape to avoid confusing following regexps
+  let line = substitute(line, '\v\m\\\\', '', 'g')
+  let line = substitute(line, '\v\m\\"', '', 'g')
+  let line = substitute(line, '\v\m\\''', '', 'g')
+  " remove strings from consideration
+  let line = substitute(line, '\v\m".\{-}"', '', 'g')
+  let line = substitute(line, '\v\m''.\{-}''', '', 'g')
+  let line = substitute(line, '\v\m\[\[.*\]\]', '', 'g')
+  return line
+endfunction
 
-fun! s:dd(msg) "{{{
-    " echom a:msg
-endfunction "}}}
-
-
-fun! s:is_literal(ln, col) "{{{
-    let synname = synIDattr(synID(a:ln, a:col, 1), "name")
-    return synname =~ '\vComment|String'
-endfunction "}}}
-
-
-fun! s:get_indent_in_block(matched_pos, matched, trailing) "{{{
-
-    let sw = &shiftwidth
-    let m = a:matched
-    let t = a:trailing
-
-    let container_pos = s:find_container_block(a:matched_pos)
-    let pos = s:find_child_block([a:matched_pos[0], 1], container_pos)
-    let ref_ind = indent(pos[0])
-
-    " if it is 'end' for a 'function', or 'end' for a 'then'
-    let endpart = s:lua_pairs[m]
-    if getline(v:lnum) =~ '\v^\s*' . endpart
-        return ref_ind
-    endif
-
-    " function(a,
-    "          b)
-    " or
-    " function(a,
-    "     b)
-    if has_key(s:lua_follow_align, m)
-        if t !~ '\v^\s*$'
-            return a:matched_pos[1] - 1 + len(m) + len(matchstr(t, '\v^\s?'))
-        end
-    endif
-
-    " in block indent
-
-    " find the start of a expression in a multi-line block, like function-end
-    " or if () then-end.
-    " but not for {}
-    if ! has_key(s:lua_single_expr_block, m)
-        let _ind = s:continuous_line_indent(v:lnum)
-        if _ind != -9999
-            return _ind
-        end
-    endif
-
-    " indent each line in a block, count in unit 'shiftwidth'
-    let ind = get(s:lua_indent, m, 1)
-    return ref_ind + sw * ind
-
-endfunction "}}}
-
-
-fun! s:find_child_block(pos, container_pos) "{{{
-
-    let pos = a:pos
-    call s:dd('find_child_block from:' . string(pos) . ' container: ' . string(a:container_pos))
-
-    while 1
-        let parent_pos = s:find_container_block(pos)
-
-        call s:dd('parent_pos: ' . string(parent_pos))
-
-        if parent_pos == a:container_pos
-            return pos
-        endif
-
-        if parent_pos[0] < a:container_pos[0]
-              \ || (parent_pos[0] == a:container_pos[0]
-              \     && parent_pos[1] < a:container_pos[1])
-            call s:dd('reached upper level: ' . string(parent_pos))
-            return pos
-        endif
-
-        let pos = parent_pos
-
-    endwhile
-
-endfunction "}}}
-
-
-" NOTE: searching backward from at end '}' fails to find the pair
-"       And searching forward from the leading '{' fails to find the pair.
-fun! s:find_container_block(pos) "{{{
-    call cursor(a:pos)
-    return searchpairpos(s:lua_start, s:lua_mid, s:lua_end, 'bWn', s:skiplines)
-endfunction "}}}
-
-
-fun! s:continuous_line_indent(cur_ln) "{{{
-    let sw = &shiftwidth
-    let head_ln = s:find_continous_head(a:cur_ln)
-
-    if head_ln == a:cur_ln
-        return -9999
+function s:IsBlockBegin(line)
+  if a:line =~# '\m\v^\s*%(if>|for>|while>|repeat>|else>|elseif>|do>|then>|function>|local\s*function>)'
+    if a:line =~# '\m\v^.*<end>.*'
+      return 0
     else
-        return indent(head_ln) + sw * 2
+      return 1
+    end
+  endif
+
+  let line = s:FilterStrings(a:line)
+
+  if line =~# '\m\v^.*\s*\=\s*function>.*'
+    return 1
+  elseif line =~# '\m\vreturn\s+function>' && !(line =~# '\m\v<function>.*<end>')
+    return 1
+  endif
+
+  return 0
+endfunction
+
+function s:IsBlockEnd(line)
+  return a:line =~# '\m\v^\s*%(end>|else>|elseif>|until>|\})'
+endfunction
+function s:HasImmediateBlockEnd(line)
+  return a:line =~# '\m\v%(<end>|until>)'
+endfunction
+
+function s:IsAssignmentAndRvalue(line)
+  return a:line =~# '\m\v^\s*\='
+endfunction
+
+function s:IsTableBegin(line)
+  let line = s:FilterStrings(a:line)
+
+  if (line =~# '\m.*{.*}.*')
+    return 0
+  elseif (line =~# '\m.*{.*')
+    return 1
+  else
+    return 0
+  endif
+endfunction
+
+function s:HasFuncCall(line)
+  return a:line =~# '\m\v\S+\(.*'
+endfunction
+
+function s:IsSingleLineComment(line)
+  return a:line =~# '\m\v^\s*--.*'
+endfunction
+
+function s:synname(...) abort
+  return synIDattr(synID(a:1, a:2, 1), 'name')
+endfunction
+
+function s:IsMultiLineString()
+  return s:synname(v:lnum, 1) == 'luaString2'
+endfunction
+
+function s:IsMultiLineComment()
+  if getline('.') =~# '\m\v^\s*--.*'
+    return 0
+  endif
+  return s:synname(v:lnum, 1) == 'luaComment'
+endfunction
+
+function s:GetStringIndent(str)
+  let indent = 0
+  for i in range(len(a:str))
+    if a:str[i] == "\t"
+      let indent += &shiftwidth
+    elseif a:str[i] == " "
+      let indent += 1
+    else
+      break
+    endif
+  endfor
+  return indent
+endfunction
+
+function s:LinesParenBalanced(lines)
+  let balance = 0
+  for line in a:lines
+    for i in range(len(line))
+      if line[i] == '('
+        let balance += 1
+      elseif line[i] == ')'
+        let balance -= 1
+      endif
+    endfor
+  endfor
+
+  return balance == 0
+endfunction
+
+function s:IsParenBalanced(line)
+  return s:LinesParenBalanced([a:line])
+endfunction
+
+function s:ParenthesizedRvalue(line)
+  return a:line =~# '\m\v\s*\=\s*\(\s*.+'
+endfunction
+
+" Retrieve the previous relevants lines used to determine indenting.
+"
+" Hopefully most of the times it will be a single line like:
+" ....foo = bar + 1
+" ....foo()
+"
+" But sometimes it can get complicated like:
+" func(arg1,
+" .....arg2,
+" .....arg3,
+"
+" or even
+" if (long_func_call(arg1,
+" ...................arg2,
+" ...................arg3))
+" ....return foo
+" end
+function! s:GetPrevLines()
+  let lines = []
+
+  let i = line('.')
+  let multiline = 0
+  while 1
+    let i -= 1
+    if i <= 0
+      return 0
+    endif
+    " $DEITY help you if your function calls span more than 8 lines
+    " avoid O(n^2) problem in long data tables
+    if len(lines) > 8
+      break
     endif
 
-endfunction "}}}
+    let line = getline(i)
+    let line = substitute(line, '\v\m\[\[.*\]\]', '', 'g')
 
+    if multiline
+      if !(line =~# '\m\v.*\[\[.*')
+        continue
+      else
+        let multiline = 0
+      endif
+    endif
+    " consider case where you are indexing with an index that itself is an
+    " index like return nmap.registry.args[argument_frags[2]]
+    if (line =~# '\m\v.*\]\].*') && !(line =~# '\m\v.*\[.+\[.*')
+      let multiline = 1
+      continue
+    endif
 
-fun! s:find_continous_head(cur_ln) "{{{
+    if s:IsLineBlank(line)
+      continue
+    endif
 
-    let cur_ln = a:cur_ln
-    call s:dd('looking for trailing_op: from: ' . cur_ln)
+    call insert(lines, line, 0)
 
-    while 1
+    if s:IsBlockBegin(line) || s:IsBlockEnd(line) || s:IsSingleLineComment(line)
+      break
+    endif
+    
+    " part of a function call argument list, or table
+    if match(line, '\v^.+,\s*') > -1
+      continue
+    endif
 
-        let prev_ln = prevnonblank(cur_ln - 1)
+    if s:IsParenBalanced(line) || s:IsTableBegin(line) || s:HasFuncCall(line)
+      break
+    endif
+  endwhile
 
-        if getline(prev_ln) =~ s:lua_trailing_op
-            \  && ! s:is_literal(prev_ln, col([prev_ln, '$']) - 1)
+  return lines
+endfunction
+" TODO: remove this
+function! LuaGetPrevLines()
+  return s:GetPrevLines()
+endfunction
 
-            let cur_ln = prev_ln
-        else
-            break
+" Tries the best effort to the find the opening '(' which marks a multi line
+" expression. However, sometimes it well balanced, meaning there is not such
+" opening locally, or such an opening would give too much indent (immediate
+" anonymous function as argument)
+function! s:FindFirstUnbalancedParen(lines)
+  let balance = 0
+  let line_indent = 0
+  let multiline = 0
+
+  for line_index in range(v:lnum - 1, 0, -1)
+    let line = getline(line_index)
+
+    if multiline
+      if !(line =~# '\m\v.*\[\[.*')
+        continue
+      else
+        let multiline = 0
+      endif
+    endif
+    if (line =~# '\m\v.*\]\].*')
+      let multiline = 1
+      continue
+    endif
+
+    " remove comments from consideration
+    let line = substitute(line, '\v\m--.*$', '', 'g')
+    let line = substitute(line, '\v\m\[\[.*$', '', 'g')
+
+    let line = s:FilterStrings(line)
+
+    for i in range(strlen(line) - 1, 0, -1)
+      if line[i] == ')'
+        let balance += 1
+      elseif line[i] == '('
+        let balance -= 1
+        if balance < 0
+          if match(line, '\v^.+\(.*<function>' ) > -1
+            return s:GetStringIndent(line) + &shiftwidth
+          else
+            return i + 1
+          endif
         endif
-    endwhile
+      endif
+    endfor
 
-    return cur_ln
+    " turns out it was not so unbalanced
+    if balance == 0
+      if s:IsLineBlank(line)
+        continue
+      endif
+      return s:GetStringIndent(line)
+    endif
+  endfor
 
-endfunction "}}}
+  return 0
+endfunction
 
-" vim: sw=4
+function s:NumClosingParentheses(line)
+  if a:line !~# '\v\m^\s*[)]\+\s*$'
+    return 0
+  endif
+  return strlen(substitute(a:line, '\v\m[^\)]', '', 'g'))
+endfunction
+
+function! GetLuaIndent()
+  " base case or first line
+  if v:lnum - 1 <= 0
+    return 0
+  endif
+
+  if s:IsMultiLineString() || s:IsMultiLineComment()
+    return indent(v:lnum)
+  endif
+
+  let cur_line = getline(v:lnum)
+
+  let prev_lines = s:GetPrevLines()
+  let prev_lines_len = len(prev_lines)
+  if prev_lines_len == 0
+    return 0
+  elseif prev_lines_len == 1
+    let indent = s:GetStringIndent(prev_lines[0])
+  else
+    let indent = s:GetStringIndent(prev_lines[0])
+  endif
+
+  " if the previous "line" has a block begin, start a new indent
+  if s:LinesParenBalanced(prev_lines)
+    if s:IsSingleLineComment(prev_lines[0])
+      " pass
+    elseif s:IsBlockBegin(prev_lines[0]) || s:IsTableBegin(prev_lines[0])
+      let indent += &shiftwidth
+      if s:HasImmediateBlockEnd(prev_lines[0])
+        let indent -= &shiftwidth
+      endif
+    endif
+  else
+    if s:IsSingleLineComment(prev_lines[-1])
+      return s:GetStringIndent(prev_lines[-1])
+    endif
+    if !s:ParenthesizedRvalue(prev_lines[-1]) && !s:IsParenBalanced(prev_lines[-1])
+      " function(
+      " ....shiftwidth,
+      if match(prev_lines[-1], '\v^.*\(\s*$') > -1
+        let indent = s:GetStringIndent(prev_lines[-1]) + &shiftwidth
+      else
+        " function(arg1,
+        " .........X
+        let indent = s:FindFirstUnbalancedParen(prev_lines)
+      endif
+    else
+      let indent = s:GetStringIndent(prev_lines[-1])
+    endif
+  endif
+
+  if s:IsBlockEnd(cur_line)
+    let indent -= &shiftwidth
+  endif
+  if s:IsAssignmentAndRvalue(cur_line)
+    let indent += &shiftwidth
+  endif
+  let indent -= s:NumClosingParentheses(cur_line) * &shiftwidth
+
+  return indent
+endfunction
