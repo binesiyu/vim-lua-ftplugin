@@ -16,7 +16,7 @@ let s:undo_ftplugin = []
 " Set comment (formatting) related options. {{{1
 setlocal fo-=t fo+=c fo+=r fo+=o fo+=q fo+=l
 setlocal cms=--%s com=s:--[[,m:\ ,e:]],:--
-setlocal fdm=syntax
+" setlocal fdm=syntax
 call add(s:undo_ftplugin, 'setlocal fo< cms< com<')
 
 " Tell Vim how to follow dofile(), loadfile() and require() calls. {{{1
